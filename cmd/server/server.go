@@ -33,14 +33,14 @@ func main() {
 		}
 		fmt.Println("Client connected!")
 
-		go Read(conn)
-
 		connections = append(connections, conn)
+
+		go Read(conn, connections)
 		//fmt.Println(connections)
 	}
 }
 
-func Read(conn net.Conn) {
+func Read(conn net.Conn, connections []net.Conn) {
 	reader := bufio.NewReader(conn)
 	for {
 		message, err := reader.ReadString('\n')
@@ -48,7 +48,10 @@ func Read(conn net.Conn) {
 			fmt.Println("Disconnected", err.Error())
 			return
 		}
-		fmt.Print(message)
-
+		for _, connection := range connections {
+			if connection != nil {
+				connection.Write([]byte(message))
+			}
+		}
 	}
 }
