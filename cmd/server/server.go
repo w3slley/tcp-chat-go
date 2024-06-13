@@ -9,13 +9,20 @@ import (
 
 const (
 	TRANSPORT_PROTOCOL = "tcp"
-	HOST               = "192.168.1.126"
+	HOST               = "localhost"
 	PORT               = "8000"
 	CONN               = HOST + ":" + PORT
+	MAX_CLIENTS        = 100
 )
 
+type Client struct {
+	id   int
+	conn net.Conn
+}
+
 func main() {
-	connections := make([]net.Conn, 2)
+	clients := make([]Client, MAX_CLIENTS)
+	p := 0
 
 	listener, err := net.Listen(TRANSPORT_PROTOCOL, CONN)
 	if err != nil {
@@ -23,7 +30,14 @@ func main() {
 	}
 
 	defer listener.Close()
-	fmt.Println("Listenning on " + CONN)
+
+	fmt.Println(`                                              
+  ___ ___  _ __  _ ____   _____ _ __ ___  ___ 
+ / __/ _ \| '_ \| '_ \ \ / / _ \ '__/ __|/ _ \
+| (_| (_) | | | | | | \ V /  __/ |  \__ \  __/
+ \___\___/|_| |_|_| |_|\_/ \___|_|  |___/\___|
+  `)
+	fmt.Println("Listenning on " + CONN + " 🚀")
 
 	for {
 		conn, err := listener.Accept()
@@ -33,24 +47,26 @@ func main() {
 		}
 		fmt.Println("Client connected!")
 
-		connections = append(connections, conn)
+		//create client struct here and add it to the lobby
+		client := &Client{id: p, conn: conn}
+		clients[p] = *client
+		p += 1
 
-		go Read(conn, connections)
-		//fmt.Println(connections)
+		go handleConnection(conn, client, clients)
 	}
 }
 
-func Read(conn net.Conn, connections []net.Conn) {
-	reader := bufio.NewReader(conn)
+func handleConnection(conn net.Conn, curr *Client, clients []Client) {
 	for {
+		reader := bufio.NewReader(conn)
 		message, err := reader.ReadString('\n')
 		if err != nil {
 			fmt.Println("Disconnected", err.Error())
 			return
 		}
-		for _, connection := range connections {
-			if connection != nil {
-				connection.Write([]byte(message))
+		for _, client := range clients {
+			if curr.id != client.id && client.conn != nil {
+				client.conn.Write([]byte(message))
 			}
 		}
 	}

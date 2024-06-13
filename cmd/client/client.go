@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	HOST     = "192.168.1.126"
+	HOST     = "localhost"
 	PORT     = "8000"
 	PROTOCOL = "tcp"
 	CONN     = HOST + ":" + PORT
