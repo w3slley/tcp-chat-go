@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 	"net"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -16,13 +18,70 @@ const (
 )
 
 type Client struct {
-	id   int
+	id   string
+	name string
 	conn net.Conn
+	room *Room
+}
+
+type Room struct {
+	id      string
+	clients []Client
+}
+
+func (c *Client) Write(message string) {
+	c.conn.Write([]byte(message))
+}
+
+func NewRoom() *Room {
+	clients := make([]Client, MAX_CLIENTS)
+	room := &Room{id: uuid.New().String(), clients: clients}
+	fmt.Printf("Room with id %s was created\n", room.id)
+	return room
+}
+
+func NewClient(conn net.Conn, room *Room) *Client {
+	client := &Client{id: uuid.New().String(), conn: conn, room: room}
+	fmt.Printf("Client %s connected \n", client.id)
+	return client
+}
+
+func (r *Room) Broadcast(curr *Client, message string) {
+	for _, client := range r.clients {
+		if curr.id != client.id && client.conn != nil {
+			client.Write(message)
+		}
+	}
+}
+
+func processNewClient(listener net.Listener, room *Room) (bool, error) {
+	conn, err := listener.Accept()
+	if err != nil {
+		log.Println("Error: ", err)
+		return false, err
+	}
+
+	client := NewClient(conn, room)
+	room.clients = append(room.clients, *client)
+
+	go handleClientInput(client)
+
+	return true, nil
+}
+
+func handleClientInput(client *Client) {
+	for {
+		reader := bufio.NewReader(client.conn)
+		message, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Println("Disconnected", err.Error())
+			return
+		}
+		client.room.Broadcast(client, message)
+	}
 }
 
 func main() {
-	clients := make([]Client, MAX_CLIENTS)
-	p := 0
 
 	listener, err := net.Listen(TRANSPORT_PROTOCOL, CONN)
 	if err != nil {
@@ -39,35 +98,8 @@ func main() {
   `)
 	fmt.Println("Listenning on " + CONN + " 🚀")
 
+	room := NewRoom()
 	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Println("Error: ", err)
-			continue
-		}
-		fmt.Println("Client connected!")
-
-		//create client struct here and add it to the lobby
-		client := &Client{id: p, conn: conn}
-		clients[p] = *client
-		p += 1
-
-		go handleConnection(conn, client, clients)
-	}
-}
-
-func handleConnection(conn net.Conn, curr *Client, clients []Client) {
-	for {
-		reader := bufio.NewReader(conn)
-		message, err := reader.ReadString('\n')
-		if err != nil {
-			fmt.Println("Disconnected", err.Error())
-			return
-		}
-		for _, client := range clients {
-			if curr.id != client.id && client.conn != nil {
-				client.conn.Write([]byte(message))
-			}
-		}
+		processNewClient(listener, room)
 	}
 }
