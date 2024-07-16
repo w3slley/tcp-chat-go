@@ -83,8 +83,13 @@ func (c *Client) JoinRoom(lobby *Lobby, roomName string) {
 	if room == nil {
 		room = lobby.NewRoom(roomName)
 	}
-	lobby.RemoveClient(c)
-	room.Join(c)
+	if c.IsInLobby() {
+		lobby.RemoveClient(c)
+	} else if c.room != nil && len(c.room.clients) == 1 {
+		room.lobby.RemoveClient(c)
+		room.lobby.RemoveRoom(room.id)
+	}
+	room.JoinClient(c)
 }
 
 func (c *Client) LeaveRoom() {
@@ -93,7 +98,7 @@ func (c *Client) LeaveRoom() {
 		c.Log(messages.NOT_IN_ROOM)
 		lobby.Help(c)
 	} else {
-		c.room.Remove(c)
+		c.room.RemoveClient(c)
 		lobby.JoinClient(c)
 	}
 }
@@ -109,14 +114,14 @@ func (r *Room) Broadcast(sender *Client, message string) {
 	}
 }
 
-func (r *Room) Join(client *Client) {
+func (r *Room) JoinClient(client *Client) {
 	r.clients = append(r.clients, client)
 	client.room = r
 
 	client.Log(fmt.Sprintf(messages.JOINED_ROOM, r.name))
 }
 
-func (r *Room) Remove(client *Client) {
+func (r *Room) RemoveClient(client *Client) {
 	indexToDelete := -1
 	for i, clientInRoom := range r.clients {
 		if clientInRoom.id == client.id {
@@ -181,6 +186,7 @@ func (l *Lobby) RemoveRoom(id string) {
 func (l *Lobby) ListRooms(client *Client) {
 	if l.rooms == nil {
 		client.Log(messages.NO_ROOMS)
+		return
 	}
 	for _, room := range l.rooms {
 		if client.room.id == room.id {
@@ -232,7 +238,7 @@ func HandleClientInput(client *Client, lobby *Lobby) {
 		command := GetCommandFromMessage(message)
 		fmt.Println(command)
 		switch command {
-		//TODO: Leave room when already in a room
+		//TODO: Leave room when using /join and you are the only user
 		case JOIN_ROOM_COMMAND:
 			roomName := GetCommandArgument(message, JOIN_ROOM_COMMAND)
 			client.JoinRoom(lobby, roomName)
