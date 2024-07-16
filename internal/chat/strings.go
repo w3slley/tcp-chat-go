@@ -1,6 +1,15 @@
-package messages
+package chat
 
 const (
+	DEFAULT_USERNAME        = "anonymous"
+	JOIN_ROOM_COMMAND       = "/join"
+	LEAVE_ROOM_COMMAND      = "/leave"
+	LIST_ROOMS_COMMAND      = "/list"
+	CHANGE_USERNAME_COMMAND = "/username"
+	SEND_MESSAGE_COMMAND    = "/send"
+	QUIT_COMMAND            = "/quit"
+	HELP_COMMAND            = "/help"
+
 	CLIENT_CONNECTED  = "Client %s connected \n"
 	JOINED_ROOM       = "Welcome to the room: %s. \n"
 	LEFT_ROOM         = "You have left the room %s. Now you are in the lobby!\n"
