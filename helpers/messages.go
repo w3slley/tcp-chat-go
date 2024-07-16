@@ -9,5 +9,6 @@ const (
 	USER_DISCONNECTED = "User with id %s disconnected!\n"
 	NOT_IN_ROOM       = "You are not in a room!\n"
 	NO_ROOMS          = "There are no rooms.\n"
+	NEW_USERNAME      = "Your username was changed to %s\n"
 	CURRENT_ROOM_ICON = "* "
 )

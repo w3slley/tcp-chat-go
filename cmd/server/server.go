@@ -58,9 +58,9 @@ type Message struct {
 	time    time.Time
 }
 
-func (c *Client) Write(message string) {
+func (c *Client) Write(message string, sender *Client) {
 	if c.conn != nil {
-		c.conn.Write([]byte(fmt.Sprintf("%s: %s", c.username, message)))
+		c.conn.Write([]byte(fmt.Sprintf("%s: %s", sender.username, message)))
 	}
 }
 
@@ -98,9 +98,14 @@ func (c *Client) LeaveRoom() {
 	}
 }
 
+func (c *Client) ChangeUsername(username string) {
+	c.username = username
+	c.Log(fmt.Sprintf(messages.NEW_USERNAME, username))
+}
+
 func (r *Room) Broadcast(sender *Client, message string) {
 	for _, receiver := range r.clients {
-		receiver.Write(message)
+		receiver.Write(message, sender)
 	}
 }
 
@@ -132,7 +137,7 @@ func (r *Room) Remove(client *Client) {
 
 func (l *Lobby) Broadcast(sender *Client, message string) {
 	for _, receiver := range l.clients {
-		receiver.Write(message)
+		receiver.Write(message, sender)
 	}
 }
 
@@ -208,7 +213,7 @@ func NewLobby() *Lobby {
 }
 
 func GetCommandArgument(message string, cmd string) string {
-	return strings.TrimSuffix(strings.TrimPrefix(message, JOIN_ROOM_COMMAND+" "), "\n")
+	return strings.TrimSuffix(strings.TrimPrefix(message, cmd+" "), "\n")
 }
 
 func HandleClientInput(client *Client, lobby *Lobby) {
@@ -232,6 +237,8 @@ func HandleClientInput(client *Client, lobby *Lobby) {
 
 		case strings.HasPrefix(message, SEND_MESSAGE_COMMAND):
 		case strings.HasPrefix(message, CHANGE_USERNAME_COMMAND):
+			newUsername := GetCommandArgument(message, CHANGE_USERNAME_COMMAND)
+			client.ChangeUsername(newUsername)
 		case strings.HasPrefix(message, HELP_COMMAND):
 			lobby.Help(client)
 		case strings.HasPrefix(message, QUIT_COMMAND):
