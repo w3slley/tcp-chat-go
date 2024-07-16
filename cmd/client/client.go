@@ -17,20 +17,6 @@ const (
 
 var wg sync.WaitGroup
 
-func main() {
-	wg.Add(1)
-
-	conn, err := net.Dial(PROTOCOL, CONN)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	go Read(conn)
-	go Write(conn)
-
-	wg.Wait()
-}
-
 func Read(conn net.Conn) {
 	reader := bufio.NewReader(conn)
 	for {
@@ -65,4 +51,18 @@ func Write(conn net.Conn) {
 			os.Exit(1)
 		}
 	}
+}
+
+func main() {
+	wg.Add(1)
+
+	conn, err := net.Dial(PROTOCOL, CONN)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	go Read(conn)
+	go Write(conn)
+
+	wg.Wait()
 }

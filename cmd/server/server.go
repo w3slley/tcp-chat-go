@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"slices"
+	"strings"
+	"time"
 
+	"connverse/helpers"
 	"github.com/google/uuid"
 )
 
@@ -14,75 +18,200 @@ const (
 	HOST               = "localhost"
 	PORT               = "8000"
 	CONN               = HOST + ":" + PORT
-	MAX_CLIENTS        = 100
+)
+
+const (
+	DEFAULT_USERNAME        = "anonymous"
+	JOIN_ROOM_COMMAND       = "/join"
+	LEAVE_ROOM_COMMAND      = "/leave"
+	LIST_ROOMS_COMMAND      = "/list"
+	CHANGE_USERNAME_COMMAND = "/username"
+	SEND_MESSAGE_COMMAND    = "/send"
+	QUIT_COMMAND            = "/quit"
+	HELP_COMMAND            = "/help"
 )
 
 type Client struct {
-	id   string
-	name string
-	conn net.Conn
-	room *Room
+	id       string
+	username string
+	conn     net.Conn
+	room     *Room
 }
 
 type Room struct {
-	id      string
-	clients []Client
+	id       string
+	name     string
+	clients  []*Client
+	messages []*Message
+}
+
+type Lobby struct {
+	clients []*Client
+	rooms   []*Room
+}
+
+type Message struct {
+	sender  *Client
+	message string
+	time    time.Time
 }
 
 func (c *Client) Write(message string) {
-	c.conn.Write([]byte(message))
+	if c.conn != nil {
+		c.conn.Write([]byte(fmt.Sprintf("%s: %s", c.username, message)))
+	}
 }
 
-func NewRoom() *Room {
-	clients := make([]Client, MAX_CLIENTS)
-	room := &Room{id: uuid.New().String(), clients: clients}
-	fmt.Printf("Room with id %s was created\n", room.id)
-	return room
+func (c *Client) Log(message string) {
+	if c.conn != nil {
+		c.conn.Write([]byte(message))
+	}
 }
 
-func NewClient(conn net.Conn, room *Room) *Client {
-	client := &Client{id: uuid.New().String(), conn: conn, room: room}
-	fmt.Printf("Client %s connected \n", client.id)
-	return client
+func (c *Client) IsInLobby() bool {
+	return c.room == nil
 }
 
-func (r *Room) Broadcast(curr *Client, message string) {
-	for _, client := range r.clients {
-		if curr.id != client.id && client.conn != nil {
-			client.Write(message)
+func (c *Client) Quit() {
+	c.conn.Close()
+}
+
+func (r *Room) Broadcast(sender *Client, message string) {
+	for _, receiver := range r.clients {
+		receiver.Write(message)
+	}
+}
+
+func (r *Room) Join(client *Client) {
+	r.clients = append(r.clients, client)
+	client.room = r
+
+	client.Log(fmt.Sprintf(messages.JOINED_ROOM, r.name))
+}
+
+func (r *Room) Remove(client *Client) {
+	indexToDelete := -1
+	for i, clientInRoom := range r.clients {
+		if clientInRoom.id == client.id {
+			indexToDelete = i
+		} else {
+			clientInRoom.Log(fmt.Sprintf(messages.USER_LEFT_ROOM, client.username))
+		}
+	}
+	if indexToDelete != -1 {
+		r.clients = slices.Delete(r.clients, indexToDelete, indexToDelete+1)
+		client.Log(fmt.Sprintf(messages.LEFT_ROOM, r.name))
+	}
+	client.room = nil
+}
+
+func (l *Lobby) Broadcast(sender *Client, message string) {
+	for _, receiver := range l.clients {
+		receiver.Write(message)
+	}
+}
+
+func (l *Lobby) GetRoomByName(name string) *Room {
+	for _, room := range l.rooms {
+		if room.name == name {
+			return room
+		}
+	}
+	return nil
+}
+
+func (l *Lobby) Remove(client *Client) {
+	fmt.Println(*client, l.clients)
+	for i, clientInLobby := range l.clients {
+		if clientInLobby.id == client.id {
+			l.clients = slices.Delete(l.clients, i, i+1)
 		}
 	}
 }
 
-func processNewClient(listener net.Listener, room *Room) (bool, error) {
-	conn, err := listener.Accept()
-	if err != nil {
-		log.Println("Error: ", err)
-		return false, err
-	}
-
-	client := NewClient(conn, room)
-	room.clients = append(room.clients, *client)
-
-	go handleClientInput(client)
-
-	return true, nil
+func (l *Lobby) Join(client *Client) {
+	l.clients = append(l.clients, client)
 }
 
-func handleClientInput(client *Client) {
+func (l *Lobby) Help(client *Client) {
+	client.Log("\n")
+	client.Log("Commands:\n")
+	client.Log("/help - list of all commands\n")
+	client.Log("/list - lists all the rooms\n")
+	client.Log("/join <room> - joins room named <room> if it exists or creates it if not\n")
+	client.Log("/username <username> - changes username to <username>\n")
+	client.Log("/quit - exits the program\n")
+}
+
+func NewRoom(name string, lobby *Lobby) *Room {
+	var clients []*Client
+	room := &Room{id: uuid.New().String(), name: name, clients: clients}
+	fmt.Printf(messages.ROOM_CREATED, room.id)
+	lobby.rooms = append(lobby.rooms, room)
+	return room
+}
+
+func NewClient(conn net.Conn) *Client {
+	client := &Client{id: uuid.New().String(), username: DEFAULT_USERNAME, conn: conn}
+	fmt.Printf(messages.CLIENT_CONNECTED, client.id)
+	return client
+}
+
+func NewLobby() *Lobby {
+	return &Lobby{
+		clients: []*Client{},
+	}
+}
+
+func GetCommandArgument(message string, cmd string) string {
+	return strings.TrimSuffix(strings.TrimPrefix(message, JOIN_ROOM_COMMAND+" "), "\n")
+}
+
+func HandleClientInput(client *Client, lobby *Lobby) {
 	for {
 		reader := bufio.NewReader(client.conn)
 		message, err := reader.ReadString('\n')
 		if err != nil {
-			fmt.Println("Disconnected", err.Error())
-			return
+			fmt.Printf(messages.USER_DISCONNECTED, client.id)
+			break
 		}
-		client.room.Broadcast(client, message)
+		switch {
+		case strings.HasPrefix(message, JOIN_ROOM_COMMAND):
+			roomName := GetCommandArgument(message, JOIN_ROOM_COMMAND)
+			room := lobby.GetRoomByName(roomName)
+			if room == nil {
+				room = NewRoom(roomName, lobby)
+			}
+			lobby.Remove(client)
+			room.Join(client)
+
+		case strings.HasPrefix(message, LEAVE_ROOM_COMMAND):
+			if client.IsInLobby() {
+				client.Log(messages.NOT_IN_ROOM)
+				lobby.Help(client)
+			} else {
+				client.room.Remove(client)
+				lobby.Join(client)
+			}
+		case strings.HasPrefix(message, LIST_ROOMS_COMMAND):
+		case strings.HasPrefix(message, SEND_MESSAGE_COMMAND):
+		case strings.HasPrefix(message, CHANGE_USERNAME_COMMAND):
+		case strings.HasPrefix(message, HELP_COMMAND):
+			lobby.Help(client)
+		case strings.HasPrefix(message, QUIT_COMMAND):
+			client.Quit()
+
+		default:
+			if client.IsInLobby() {
+				lobby.Broadcast(client, message)
+			} else {
+				client.room.Broadcast(client, message)
+			}
+		}
 	}
 }
 
 func main() {
-
 	listener, err := net.Listen(TRANSPORT_PROTOCOL, CONN)
 	if err != nil {
 		log.Fatal(err)
@@ -90,16 +219,27 @@ func main() {
 
 	defer listener.Close()
 
-	fmt.Println(`                                              
+	connverseAscii := `                                              
   ___ ___  _ __  _ ____   _____ _ __ ___  ___ 
  / __/ _ \| '_ \| '_ \ \ / / _ \ '__/ __|/ _ \
 | (_| (_) | | | | | | \ V /  __/ |  \__ \  __/
  \___\___/|_| |_|_| |_|\_/ \___|_|  |___/\___|
-  `)
+  `
+	fmt.Println(connverseAscii)
 	fmt.Println("Listenning on " + CONN + " 🚀")
 
-	room := NewRoom()
+	lobby := NewLobby()
+
 	for {
-		processNewClient(listener, room)
+		conn, err := listener.Accept()
+		if err != nil {
+			log.Println("Error: ", err)
+		}
+
+		client := NewClient(conn)
+		client.Log(fmt.Sprintf("%s \n Welcome to connverse, your TCP chat application accessed via SSH! \n", connverseAscii))
+		lobby.Join(client)
+
+		go HandleClientInput(client, lobby)
 	}
 }
