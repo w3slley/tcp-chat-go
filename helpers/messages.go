@@ -8,4 +8,6 @@ const (
 	ROOM_CREATED      = "Room with id %s was created\n"
 	USER_DISCONNECTED = "User with id %s disconnected!\n"
 	NOT_IN_ROOM       = "You are not in a room!\n"
+	NO_ROOMS          = "There are no rooms.\n"
+	CURRENT_ROOM_ICON = "* "
 )

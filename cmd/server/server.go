@@ -34,6 +34,7 @@ const (
 type Client struct {
 	id       string
 	username string
+	color    string //store hex
 	conn     net.Conn
 	room     *Room
 }
@@ -43,6 +44,7 @@ type Room struct {
 	name     string
 	clients  []*Client
 	messages []*Message
+	lobby    *Lobby
 }
 
 type Lobby struct {
@@ -76,6 +78,26 @@ func (c *Client) Quit() {
 	c.conn.Close()
 }
 
+func (c *Client) JoinRoom(lobby *Lobby, roomName string) {
+	room := lobby.GetRoomByName(roomName)
+	if room == nil {
+		room = lobby.NewRoom(roomName)
+	}
+	lobby.RemoveClient(c)
+	room.Join(c)
+}
+
+func (c *Client) LeaveRoom() {
+	lobby := c.room.lobby
+	if c.IsInLobby() {
+		c.Log(messages.NOT_IN_ROOM)
+		lobby.Help(c)
+	} else {
+		c.room.Remove(c)
+		lobby.JoinClient(c)
+	}
+}
+
 func (r *Room) Broadcast(sender *Client, message string) {
 	for _, receiver := range r.clients {
 		receiver.Write(message)
@@ -102,6 +124,9 @@ func (r *Room) Remove(client *Client) {
 		r.clients = slices.Delete(r.clients, indexToDelete, indexToDelete+1)
 		client.Log(fmt.Sprintf(messages.LEFT_ROOM, r.name))
 	}
+	if len(r.clients) == 0 {
+		r.lobby.RemoveRoom(r.id)
+	}
 	client.room = nil
 }
 
@@ -120,8 +145,7 @@ func (l *Lobby) GetRoomByName(name string) *Room {
 	return nil
 }
 
-func (l *Lobby) Remove(client *Client) {
-	fmt.Println(*client, l.clients)
+func (l *Lobby) RemoveClient(client *Client) {
 	for i, clientInLobby := range l.clients {
 		if clientInLobby.id == client.id {
 			l.clients = slices.Delete(l.clients, i, i+1)
@@ -129,8 +153,36 @@ func (l *Lobby) Remove(client *Client) {
 	}
 }
 
-func (l *Lobby) Join(client *Client) {
+func (l *Lobby) JoinClient(client *Client) {
 	l.clients = append(l.clients, client)
+}
+
+func (l *Lobby) NewRoom(name string) *Room {
+	var clients []*Client
+	room := &Room{id: uuid.New().String(), name: name, clients: clients, lobby: l}
+	fmt.Printf(messages.ROOM_CREATED, room.id)
+	l.rooms = append(l.rooms, room)
+	return room
+}
+
+func (l *Lobby) RemoveRoom(id string) {
+	for i, room := range l.rooms {
+		if room.id == id {
+			l.rooms = slices.Delete(l.rooms, i, i+1)
+		}
+	}
+}
+
+func (l *Lobby) ListRooms(client *Client) {
+	if l.rooms == nil {
+		client.Log(messages.NO_ROOMS)
+	}
+	for _, room := range l.rooms {
+		if client.room.id == room.id {
+			client.Log(messages.CURRENT_ROOM_ICON)
+		}
+		client.Log(fmt.Sprintf("%s\n", room.name))
+	}
 }
 
 func (l *Lobby) Help(client *Client) {
@@ -141,14 +193,6 @@ func (l *Lobby) Help(client *Client) {
 	client.Log("/join <room> - joins room named <room> if it exists or creates it if not\n")
 	client.Log("/username <username> - changes username to <username>\n")
 	client.Log("/quit - exits the program\n")
-}
-
-func NewRoom(name string, lobby *Lobby) *Room {
-	var clients []*Client
-	room := &Room{id: uuid.New().String(), name: name, clients: clients}
-	fmt.Printf(messages.ROOM_CREATED, room.id)
-	lobby.rooms = append(lobby.rooms, room)
-	return room
 }
 
 func NewClient(conn net.Conn) *Client {
@@ -178,22 +222,14 @@ func HandleClientInput(client *Client, lobby *Lobby) {
 		switch {
 		case strings.HasPrefix(message, JOIN_ROOM_COMMAND):
 			roomName := GetCommandArgument(message, JOIN_ROOM_COMMAND)
-			room := lobby.GetRoomByName(roomName)
-			if room == nil {
-				room = NewRoom(roomName, lobby)
-			}
-			lobby.Remove(client)
-			room.Join(client)
+			client.JoinRoom(lobby, roomName)
 
 		case strings.HasPrefix(message, LEAVE_ROOM_COMMAND):
-			if client.IsInLobby() {
-				client.Log(messages.NOT_IN_ROOM)
-				lobby.Help(client)
-			} else {
-				client.room.Remove(client)
-				lobby.Join(client)
-			}
+			client.LeaveRoom()
+
 		case strings.HasPrefix(message, LIST_ROOMS_COMMAND):
+			lobby.ListRooms(client)
+
 		case strings.HasPrefix(message, SEND_MESSAGE_COMMAND):
 		case strings.HasPrefix(message, CHANGE_USERNAME_COMMAND):
 		case strings.HasPrefix(message, HELP_COMMAND):
@@ -238,7 +274,7 @@ func main() {
 
 		client := NewClient(conn)
 		client.Log(fmt.Sprintf("%s \n Welcome to connverse, your TCP chat application accessed via SSH! \n", connverseAscii))
-		lobby.Join(client)
+		lobby.JoinClient(client)
 
 		go HandleClientInput(client, lobby)
 	}
