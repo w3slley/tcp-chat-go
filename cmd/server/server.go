@@ -212,6 +212,11 @@ func NewLobby() *Lobby {
 	}
 }
 
+func GetCommandFromMessage(message string) string {
+	cmd := strings.Split(message, " ")[0]
+	return strings.TrimSpace(cmd)
+}
+
 func GetCommandArgument(message string, cmd string) string {
 	return strings.TrimSuffix(strings.TrimPrefix(message, cmd+" "), "\n")
 }
@@ -224,24 +229,31 @@ func HandleClientInput(client *Client, lobby *Lobby) {
 			fmt.Printf(messages.USER_DISCONNECTED, client.id)
 			break
 		}
-		switch {
-		case strings.HasPrefix(message, JOIN_ROOM_COMMAND):
+		command := GetCommandFromMessage(message)
+		fmt.Println(command)
+		switch command {
+		//TODO: Leave room when already in a room
+		case JOIN_ROOM_COMMAND:
 			roomName := GetCommandArgument(message, JOIN_ROOM_COMMAND)
 			client.JoinRoom(lobby, roomName)
 
-		case strings.HasPrefix(message, LEAVE_ROOM_COMMAND):
+		case LEAVE_ROOM_COMMAND:
 			client.LeaveRoom()
 
-		case strings.HasPrefix(message, LIST_ROOMS_COMMAND):
+		case LIST_ROOMS_COMMAND:
 			lobby.ListRooms(client)
 
-		case strings.HasPrefix(message, SEND_MESSAGE_COMMAND):
-		case strings.HasPrefix(message, CHANGE_USERNAME_COMMAND):
+		case SEND_MESSAGE_COMMAND:
+			//TODO: Implement
+
+		case CHANGE_USERNAME_COMMAND:
 			newUsername := GetCommandArgument(message, CHANGE_USERNAME_COMMAND)
 			client.ChangeUsername(newUsername)
-		case strings.HasPrefix(message, HELP_COMMAND):
+
+		case HELP_COMMAND:
 			lobby.Help(client)
-		case strings.HasPrefix(message, QUIT_COMMAND):
+
+		case QUIT_COMMAND:
 			client.Quit()
 
 		default:
