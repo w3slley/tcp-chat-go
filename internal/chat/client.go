@@ -10,7 +10,7 @@ import (
 type Client struct {
 	id       string
 	username string
-	color    string //store hex
+	color    []byte //hex
 	conn     net.Conn
 	room     *Room
 }
@@ -45,6 +45,7 @@ func (c *Client) JoinRoom(lobby *Lobby, roomName string) {
 	} else if c.room != nil && len(c.room.clients) == 1 {
 		room.lobby.RemoveRoom(c.room.id)
 	}
+	room.BroadcastLog(fmt.Sprintf(USER_JOINED_ROOM, c.username))
 	room.JoinClient(c)
 }
 

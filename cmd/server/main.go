@@ -1,10 +1,11 @@
 package main
 
 import (
-	"connverse/internal/chat"
 	"fmt"
 	"log"
 	"net"
+
+	"connverse/internal/chat"
 )
 
 const (
@@ -40,7 +41,7 @@ func main() {
 		}
 
 		client := chat.NewClient(conn)
-		client.Log(fmt.Sprintf("%s \n Welcome to connverse, your TCP chat application accessed via SSH! \n", connverseAscii))
+		client.Log(fmt.Sprintf(chat.WELCOME, connverseAscii))
 		lobby.JoinClient(client)
 
 		go chat.HandleClientInput(client, lobby)

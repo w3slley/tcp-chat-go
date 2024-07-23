@@ -19,6 +19,12 @@ func (r *Room) Broadcast(sender *Client, message string) {
 	}
 }
 
+func (r *Room) BroadcastLog(message string) {
+	for _, receiver := range r.clients {
+		receiver.Log(message)
+	}
+}
+
 func (r *Room) JoinClient(client *Client) {
 	r.clients = append(r.clients, client)
 	client.room = r

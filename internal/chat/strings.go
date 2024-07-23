@@ -10,7 +10,9 @@ const (
 	QUIT_COMMAND            = "/quit"
 	HELP_COMMAND            = "/help"
 
+	WELCOME           = "%s\nWelcome to connverse, your TCP chat application accessed via SSH! \n"
 	CLIENT_CONNECTED  = "Client %s connected \n"
+	USER_JOINED_ROOM  = "User %s joined the room\n"
 	JOINED_ROOM       = "Welcome to the room: %s. \n"
 	LEFT_ROOM         = "You have left the room %s. Now you are in the lobby!\n"
 	USER_LEFT_ROOM    = "%s left the room.\n"
