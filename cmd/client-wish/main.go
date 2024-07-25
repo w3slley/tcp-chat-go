@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -18,7 +17,6 @@ import (
 	"github.com/charmbracelet/wish/activeterm"
 	"github.com/charmbracelet/wish/bubbletea"
 	"github.com/charmbracelet/wish/logging"
-	"github.com/charmbracelet/x/editor"
 )
 
 const (
@@ -29,16 +27,9 @@ const (
 func main() {
 	s, err := wish.NewServer(
 		wish.WithAddress(net.JoinHostPort(host, port)),
-
-		// Allocate a pty.
-		// This creates a pseudoconsole on windows, compatibility is limited in
-		// that case, see the open issues for more details.
 		ssh.AllocatePty(),
 		wish.WithMiddleware(
-			// run our Bubble Tea handler
 			bubbletea.Middleware(teaHandler),
-
-			// ensure the user has requested a tty
 			activeterm.Middleware(),
 			logging.Middleware(),
 		),
@@ -67,84 +58,80 @@ func main() {
 }
 
 func teaHandler(s ssh.Session) (tea.Model, []tea.ProgramOption) {
-	// Create a lipgloss.Renderer for the session
-	renderer := bubbletea.MakeRenderer(s)
-	// Set up the model with the current session and styles.
-	// We'll use the session to call wish.Command, which makes it compatible
-	// with tea.Command.
-	m := model{
-		sess:     s,
-		style:    renderer.NewStyle().Foreground(lipgloss.Color("8")),
-		errStyle: renderer.NewStyle().Foreground(lipgloss.Color("3")),
-	}
+	m := initialModel(s)
 	return m, []tea.ProgramOption{tea.WithAltScreen()}
 }
 
+type screen int
+type focus int
+
+const (
+	WelcomeScreen screen = iota
+	LobbyScreen
+	RoomScreen
+)
+
+const (
+	None focus = iota
+	InputFocus
+	MessagesFocus
+)
+
+type Message struct{}
+
 type model struct {
-	err      error
-	sess     ssh.Session
-	style    lipgloss.Style
-	errStyle lipgloss.Style
+	width         int
+	height        int
+	currentScreen screen
+	currentFocus  focus
+	userInput     string
+	messages      *[]Message
+	session       ssh.Session
+	style         lipgloss.Style
+	errStyle      lipgloss.Style
+}
+
+func initialModel(s ssh.Session) model {
+	renderer := bubbletea.MakeRenderer(s)
+	return model{
+		currentScreen: WelcomeScreen,
+		currentFocus:  None,
+		session:       s,
+		style:         renderer.NewStyle().Foreground(lipgloss.Color("8")),
+		errStyle:      renderer.NewStyle().Foreground(lipgloss.Color("3")),
+	}
+
 }
 
 func (m model) Init() tea.Cmd {
 	return nil
 }
 
-type cmdFinishedMsg struct{ err error }
-
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "e":
-			// Open file.txt in the default editor.
-			edit, err := editor.Cmd("wish", "file.txt")
-			if err != nil {
-				m.err = err
-				return m, nil
-			}
-			// Creates a wish.Cmd from the exec.Cmd
-			wishCmd := wish.Command(m.sess, edit.Path, edit.Args...)
-			// Runs the cmd through Bubble Tea.
-			// Bubble Tea should handle the IO to the program, and get it back
-			// once the program quits.
-			cmd := tea.Exec(wishCmd, func(err error) tea.Msg {
-				if err != nil {
-					log.Error("editor finished", "error", err)
-				}
-				return cmdFinishedMsg{err: err}
-			})
-			return m, cmd
+		case "c":
+		case "j":
 		case "s":
-			// We can also execute a shell and give it over to the user.
-			// Note that this session won't have control, so it can't run tasks
-			// in background, suspend, etc.
-			c := wish.Command(m.sess, "bash", "-im")
-			if runtime.GOOS == "windows" {
-				c = wish.Command(m.sess, "powershell")
-			}
-			cmd := tea.Exec(c, func(err error) tea.Msg {
-				if err != nil {
-					log.Error("shell finished", "error", err)
-				}
-				return cmdFinishedMsg{err: err}
-			})
-			return m, cmd
+		case "u":
 		case "q", "ctrl+c":
 			return m, tea.Quit
 		}
-	case cmdFinishedMsg:
-		m.err = msg.err
-		return m, nil
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
 	}
 
 	return m, nil
 }
 
 func (m model) View() string {
-	if m.err != nil {
-		return m.errStyle.Render(m.err.Error() + "\n")
+	switch m.currentScreen {
+	case WelcomeScreen:
+		return welcomeView(m)
+	case LobbyScreen:
+		return lobbyView(m)
 	}
-	return m.style.Render("Press 'e' to edit, 's' to hop into a shell, or 'q' to quit...\n")
+	return ""
 }

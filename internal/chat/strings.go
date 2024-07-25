@@ -9,8 +9,19 @@ const (
 	SEND_MESSAGE_COMMAND    = "/send"
 	QUIT_COMMAND            = "/quit"
 	HELP_COMMAND            = "/help"
+)
 
-	WELCOME           = "%s\nWelcome to connverse, your TCP chat application accessed via SSH! \n"
+const (
+	LOBBY_UI_COMMAND           = "l - go to lobby"
+	JOIN_ROOM_UI_COMMAND       = "j - join room"
+	CREATE_ROOM_UI_COMMAND     = "c - create room"
+	SEND_MESSAGE_UI_COMMAND    = "s - send message"
+	CHANGE_USERNAME_UI_COMMAND = "u - change username"
+	QUIT_UI_COMMAND            = "q - quit"
+)
+
+const (
+	WELCOME           = "Hey %s! Welcome to connverse, your TCP chat application accessed via SSH \n"
 	CLIENT_CONNECTED  = "Client %s connected \n"
 	USER_JOINED_ROOM  = "User %s joined the room\n"
 	JOINED_ROOM       = "Welcome to the room: %s. \n"

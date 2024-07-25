@@ -23,13 +23,6 @@ func main() {
 
 	defer listener.Close()
 
-	connverseAscii := `                                              
-  ___ ___  _ __  _ ____   _____ _ __ ___  ___ 
- / __/ _ \| '_ \| '_ \ \ / / _ \ '__/ __|/ _ \
-| (_| (_) | | | | | | \ V /  __/ |  \__ \  __/
- \___\___/|_| |_|_| |_|\_/ \___|_|  |___/\___|
-  `
-	fmt.Println(connverseAscii)
 	fmt.Println("Listenning on " + CONN + " 🚀")
 
 	lobby := chat.NewLobby()
@@ -41,7 +34,6 @@ func main() {
 		}
 
 		client := chat.NewClient(conn)
-		client.Log(fmt.Sprintf(chat.WELCOME, connverseAscii))
 		lobby.JoinClient(client)
 
 		go chat.HandleClientInput(client, lobby)
